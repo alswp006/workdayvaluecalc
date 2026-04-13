@@ -3,16 +3,16 @@
 import React from 'react';
 import ReactDOM from 'react-dom/client';
 import { BrowserRouter } from 'react-router-dom';
-import { ThemeProvider } from '@toss/tds-mobile';
+import { TDSMobileAITProvider } from '@toss/tds-mobile-ait';
 import App from './App';
 import './styles/globals.css';
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
-    <ThemeProvider>
+    <TDSMobileAITProvider>
       <BrowserRouter>
         <App />
       </BrowserRouter>
-    </ThemeProvider>
+    </TDSMobileAITProvider>
   </React.StrictMode>,
 );
