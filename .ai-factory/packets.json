@@ -1,0 +1,596 @@
+[
+  {
+    "id": "0001",
+    "title": "타입 정의: 데이터 모델 + RouteState 계약",
+    "epic": "Epic 1 (Data/Storage)",
+    "task": {
+      "description": "SPEC/TASK에 나온 엔티티 타입과 라우팅 location.state 계약을 src/lib/types.ts에 순수 타입으로만 정의해요. 런타임 코드 없이 export 목록을 맞추고, 각 경로의 incoming/outgoing state 형태를 RouteState로 고정해요.",
+      "acceptance_criteria": [
+        "src/lib/types.ts가 런타임 코드 없이(type/interface/type alias만) 컴파일되어야 한다",
+        "WorkProfile, WorkProfileSnapshot, CalcRecord, CalcRecordStore, FixedExpense, FixedExpenseStore, SavingsGoalState, AiNoticeState, AppPolicyState, CalcSource, RouteState가 모두 export되어야 한다",
+        "RouteState가 최소 '/', '/settings', '/result', '/scan', '/fixed-expenses', '/savings-goal', '/history', '/share', '/compare' 키를 포함해야 한다"
+      ]
+    },
+    "covers": [],
+    "files": [
+      "src/lib/types.ts"
+    ],
+    "definition_of_done": [
+      "TypeScript build 통과",
+      "페이지/스토어에서 RouteState import 가능"
+    ],
+    "depends_on": [],
+    "db_schema": "",
+    "api_contract": "",
+    "dependencies": [],
+    "ui_requirements": ""
+  },
+  {
+    "id": "0002",
+    "title": "localStorage 안전 IO 유틸 + 키 상수",
+    "epic": "Epic 1 (Data/Storage)",
+    "task": {
+      "description": "localStorage JSON 읽기/쓰기 공통 래퍼를 구현해요. JSON 파싱 실패를 구분해 반환하고, setItem이 QuotaExceededError를 던질 때 크래시 없이 실패 결과를 반환하며 기존 값을 롤백해요. 키 문자열은 별도 상수로 고정해요.",
+      "acceptance_criteria": [
+        "readJson(key)에서 key가 없으면 { ok:true, value:null }을 반환해야 한다",
+        "readJson(key)에서 JSON 파싱 실패 시 { ok:false, error:{ type:'PARSE_ERROR', key } }를 반환해야 한다",
+        "writeJsonWithRollback(key,nextValue)에서 setItem이 throw하면 { ok:false, error:{ type:'QUOTA_EXCEEDED', key } }를 반환하고, 호출 전 localStorage 값이 호출 후에도 동일해야 한다(롤백)"
+      ]
+    },
+    "covers": [
+      "S2-AC5"
+    ],
+    "files": [
+      "src/lib/storage/io.ts",
+      "src/lib/storage/keys.ts"
+    ],
+    "definition_of_done": [
+      "Quota/파싱 에러를 UI/스토어가 감지 가능한 구조로 반환",
+      "TypeScript build 통과"
+    ],
+    "depends_on": [
+      "0001"
+    ],
+    "db_schema": "",
+    "api_contract": "",
+    "dependencies": [],
+    "ui_requirements": ""
+  },
+  {
+    "id": "0003",
+    "title": "Profile/Calcs storage CRUD + 100개 제한/초기화",
+    "epic": "Epic 1 (Data/Storage)",
+    "task": {
+      "description": "wdv_profile_v1, wdv_calcs_v1에 대한 로드/저장/초기화/추가 로직을 구현해요. calcs는 createdAt 내림차순을 유지하고, 추가 후 100개 초과 시 오래된 항목부터 제거해 정확히 100개로 맞춰요. 파싱 실패는 결과로 전달해요.",
+      "acceptance_criteria": [
+        "getCalcStore()는 값이 없을 때 { version:1, items:[] }를 반환해야 한다",
+        "resetCalcStore() 실행 후 localStorage wdv_calcs_v1의 JSON이 { version:1, items:[] }와 동등해야 한다",
+        "addCalcRecord() 호출로 items가 101개가 되면 저장 결과 items.length가 100이어야 하고, createdAt 내림차순 정렬이 유지되어야 한다"
+      ]
+    },
+    "covers": [
+      "S1-AC5"
+    ],
+    "files": [
+      "src/lib/storage/profile.ts",
+      "src/lib/storage/calcs.ts"
+    ],
+    "definition_of_done": [
+      "저장/로드 결과 타입이 페이지/스토어에서 직접 사용 가능",
+      "TypeScript build 통과"
+    ],
+    "depends_on": [
+      "0002"
+    ],
+    "db_schema": "",
+    "api_contract": "",
+    "dependencies": [],
+    "ui_requirements": ""
+  },
+  {
+    "id": "0004",
+    "title": "FixedExpenses/SavingsGoal/AiNotice/Policy storage CRUD",
+    "epic": "Epic 1 (Data/Storage)",
+    "task": {
+      "description": "wdv_fixed_expenses_v1, wdv_savings_goal_v1, wdv_ai_notice_v1, wdv_policy_v1의 기본 CRUD와 기본값 생성을 구현해요. 모든 쓰기는 writeJsonWithRollback을 사용하고, AI 고지 ack는 scanAiNoticeAcknowledged=true 및 acknowledgedAt 저장까지 포함해요.",
+      "acceptance_criteria": [
+        "ackScanAiNotice() 호출 후 wdv_ai_notice_v1.scanAiNoticeAcknowledged가 true이고 acknowledgedAt(number)가 저장되어야 한다",
+        "getPolicyState()가 값이 없을 때 { version:1, blockExternalNavigation:true }(동등) 형태를 반환해야 한다",
+        "addFixedExpense()가 writeJsonWithRollback을 통해 저장을 시도하고 실패 시 ok:false를 반환해야 한다(throw 금지)"
+      ]
+    },
+    "covers": [
+      "S4-AC1"
+    ],
+    "files": [
+      "src/lib/storage/fixedExpenses.ts",
+      "src/lib/storage/savingsGoal.ts",
+      "src/lib/storage/aiNotice.ts",
+      "src/lib/storage/policy.ts"
+    ],
+    "definition_of_done": [
+      "각 스토어에 기본값/버전 포함",
+      "TypeScript build 통과"
+    ],
+    "depends_on": [
+      "0002",
+      "0001"
+    ],
+    "db_schema": "",
+    "api_contract": "",
+    "dependencies": [],
+    "ui_requirements": ""
+  },
+  {
+    "id": "0005",
+    "title": "도메인 유틸: 환산/포맷/스캔 API/공유 codec/카운트업 애니메이션",
+    "epic": "Epic 1 (Data/Storage)",
+    "task": {
+      "description": "페이지에서 재사용할 환산 계산/원화 포맷/스캔 API 클라이언트/공유 payload 인코딩·디코딩/카운트업 애니메이션 헬퍼를 구현해요. 외부 애니메이션 라이브러리 없이 requestAnimationFrame 기반으로 최소 3회 이상 업데이트되게 보장해요.",
+      "acceptance_criteria": [
+        "formatKRW(60000) 호출 결과 문자열이 '원'을 포함하고, '60,000' 구분자가 포함되어야 한다",
+        "animateCountUp({from:0,to:10,durationMs:200,...}) 실행 시 onUpdate가 최소 3회 이상 호출되고, 종료 시 onUpdate(10) 이후 onDone()이 1회 호출되어야 한다",
+        "recognizePrice(file) 호출은 POST /api/scan/extract-price로 multipart/form-data 요청을 시도하고, 반환값에 status(number)와 normalizedAmountKRW(number)가 포함되어야 한다"
+      ]
+    },
+    "covers": [
+      "S3-AC3",
+      "S4-AC2"
+    ],
+    "files": [
+      "src/lib/domain/calc.ts",
+      "src/lib/domain/format.ts",
+      "src/lib/domain/scanApi.ts",
+      "src/lib/domain/sharePayload.ts",
+      "src/lib/domain/animate.ts"
+    ],
+    "definition_of_done": [
+      "네트워크 실패/비정상 응답을 throw 대신 결과(status 포함)로 상위에서 처리 가능",
+      "TypeScript build 통과"
+    ],
+    "depends_on": [
+      "0001"
+    ],
+    "db_schema": "",
+    "api_contract": "POST /api/scan/extract-price (multipart/form-data: file) → 200 { detectedAmountKRW?:number, amountKRW?:number } | errors: 400/401/422/500",
+    "dependencies": [],
+    "ui_requirements": ""
+  },
+  {
+    "id": "0006",
+    "title": "AppStore Context: 부트 로딩/파싱에러/저장 액션(중복방지 포함)",
+    "epic": "Epic 1 (Data/Storage)",
+    "task": {
+      "description": "프로필/계산기록/고정지출/AI 고지 상태를 Context로 제공해요. 마운트 시 1회 로드하며 isBootLoading 플래그를 true→false로 전환해요. calcs 파싱 실패 플래그와 초기화 액션, 프로필 저장 중복 호출 방지(1회만 write) 및 Quota 에러 결과 반환을 포함해요.",
+      "acceptance_criteria": [
+        "AppStoreProvider 마운트 직후 isBootLoading이 true이고, 비동기 로드 완료 후 false로 변경되어야 한다",
+        "wdv_calcs_v1 파싱 실패 결과를 받으면 calcsParseError가 true가 되어야 하고, resetCalcs() 호출 후 calcsParseError가 false이며 items.length===0이어야 한다",
+        "saveProfile()을 연속 2회 호출해도 저장 함수(setWorkProfile)가 1회만 실행되고, Quota 실패 시 { ok:false, error:'QUOTA_EXCEEDED' } 형태로 반환되어야 한다"
+      ]
+    },
+    "covers": [
+      "S1-AC1",
+      "S1-AC5",
+      "S2-AC5"
+    ],
+    "files": [
+      "src/lib/store/AppStore.tsx"
+    ],
+    "definition_of_done": [
+      "Home/Settings/Result/Scan 페이지가 스토어 훅만으로 로딩/에러 상태를 렌더 가능",
+      "TypeScript build 통과"
+    ],
+    "depends_on": [
+      "0003",
+      "0004",
+      "0005"
+    ],
+    "db_schema": "",
+    "api_contract": "",
+    "dependencies": [],
+    "ui_requirements": ""
+  },
+  {
+    "id": "0007",
+    "title": "페이지: 홈 / (빠른 계산 + 최근 5개 + 파싱 실패 복구)",
+    "epic": "Epic 2 (Pages)",
+    "task": {
+      "description": "홈에서 금액/항목명을 입력해 수동 계산 기록을 추가하고, 최근 5개를 ListRow로 보여줘요. 프로필 미설정 Empty, 금액/제목 검증, calcs 파싱 실패 시 초기화 다이얼로그까지 포함해요. 섹션 사이에 AdSlot을 배치해요.",
+      "acceptance_criteria": [
+        "isBootLoading=true인 동안 Paragraph.Text '불러오는 중...'이 화면에 존재해야 한다(S1-AC1)",
+        "금액이 비었거나 0일 때 '계산하기' 탭하면 금액 TextField help로 '금액을 1원 이상 입력해주세요'가 표시되고 navigate('/result')가 호출되지 않아야 한다(S1-AC2)",
+        "프로필이 없을 때 (1) '급여 설정이 필요해요'가 보이고 (2) '설정' 탭 시 navigate('/settings')가 호출되며 (3) '계산하기' 탭 시 AlertDialog 제목 '급여 설정 필요'가 떠야 한다(S1-AC3~4)",
+        "calcsParseError=true면 AlertDialog 본문 '저장된 데이터를 읽을 수 없어요. 초기화할까요?'가 표시되고, '초기화' 탭 후 wdv_calcs_v1.items.length===0이어야 한다(S1-AC5)"
+      ]
+    },
+    "covers": [
+      "S1-AC1",
+      "S1-AC2",
+      "S1-AC3",
+      "S1-AC4",
+      "S1-AC5"
+    ],
+    "files": [
+      "src/pages/Home.tsx"
+    ],
+    "definition_of_done": [
+      "최근 5개 ListRow 탭 시 tickWeak 햅틱 후 /result로 이동",
+      "TextField onFocus 시 scrollIntoView({block:'center'}) 호출"
+    ],
+    "depends_on": [
+      "0006"
+    ],
+    "db_schema": "",
+    "api_contract": "",
+    "dependencies": [
+      "lucide-react"
+    ],
+    "ui_requirements": "## Screen: 홈(빠른 계산) (`/`)\n\n### Layout\n```tsx\n<Top title={<Top.TitleParagraph>노동값 계산</Top.TitleParagraph>} />\n\n<Spacing size={16} />\n<TextField variant=\"box\" label=\"금액(원)\" value={amount} onChange={...} />\n<Spacing size={8} />\n<TextField variant=\"box\" label=\"항목명(선택)\" value={title} onChange={...} />\n\n<Spacing size={12} />\n<div style={{ display: 'flex', gap: 8, overflowX: 'auto' }}>\n  <Chip label=\"사진으로 인식\" onClick={goScan} />\n  <Chip label=\"고정지출\" onClick={goFixed} />\n  <Chip label=\"목표저축\" onClick={goSavings} />\n</div>\n\n<Spacing size={16} />\n<Button variant=\"fill\" size=\"large\" onClick={handleCalc}>계산하기</Button>\n\n<Spacing size={20} />\n<Paragraph.Text typography=\"t4\">최근 계산</Paragraph.Text>\n<Spacing size={12} />\n{recent5.map(item => (\n  <ListRow\n    onClick={() => goResult(item.id)}\n    contents={<ListRow.Texts type=\"2RowTypeA\" top={item.titleOrAmount} bottom={item.summary} />}\n  />\n))}\n\n<Spacing size={16} />\n<AdSlot />\n\n<Spacing size={20} />\n<Button variant=\"weak\" size=\"large\" onClick={goHistory}>기록 더보기</Button>\n\n<Toast open={toastOpen} position=\"bottom\" onClose={...} />\n\n<AlertDialog\n  open={resetDialogOpen}\n  description=\"저장된 데이터를 읽을 수 없어요. 초기화할까요?\"\n  alertButton={<AlertDialog.AlertButton onClick={handleReset}>초기화</AlertDialog.AlertButton>}\n  onClose={() => setResetDialogOpen(false)}\n/>\n```\n\n### States\n- Loading:\n  - `Paragraph.Text typography=\"st6\"`: `\"불러오는 중...\"`\n- Empty (프로필 미설정):\n```tsx\n<div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '64px 16px', gap: 16 }}>\n  <Paragraph.Text typography=\"st6\" color=\"tertiary\">급여 설정이 필요해요</Paragraph.Text>\n  <Button variant=\"weak\" size=\"medium\" onClick={goSettings}>설정</Button>\n</div>\n```\n- Error (localStorage 파싱 실패):\n  - 위 AlertDialog 노출 + “초기화” 버튼 제공\n\n### Interactions\n- `\"계산하기\"` 탭: `generateHapticFeedback({ type: 'success' })`\n  - 금액 비었거나 0이면 TextField `help=\"금액을 1원 이상 입력해주세요\"` 표시, 이동 없음\n  - 프로필 없으면 AlertDialog(제목 `\"급여 설정 필요\"`, 본문 `\"먼저 급여/근무조건을 설정해주세요\"`)\n- 최근 ListRow 탭: `generateHapticFeedback({ type: 'tickWeak' })` 후 `/result` 이동\n- Chip 탭(사진/고정지출/목표저축): `tickWeak`\n- 숫자 TextField focus 시 `scrollIntoView({ block: 'center' })`\n- 파싱 실패 다이얼로그 “초기화”: `tickStrong`\n"
+  },
+  {
+    "id": "0008",
+    "title": "페이지: 설정 /settings (저장/검증/Quota 다이얼로그/중복 저장 방지)",
+    "epic": "Epic 2 (Pages)",
+    "task": {
+      "description": "급여/근무조건 입력과 저장을 구현해요. 부트 로딩 중 '불러오는 중...' 표시, 급여/근무시간 0 저장 거부, 저장 성공 시 Toast 후 navigate(-1), QuotaExceededError 시 '저장 실패' 다이얼로그를 노출해요. 저장 중 중복 탭은 차단해요.",
+      "acceptance_criteria": [
+        "isBootLoading=true인 동안 Paragraph.Text '불러오는 중...'이 화면에 존재해야 한다(S2-AC1)",
+        "payAmount=0으로 '저장' 탭 시 help '급여를 1원 이상 입력해주세요'가 표시되고 localStorage wdv_profile_v1 값이 변경되지 않아야 한다(S2-AC3)",
+        "workHoursPerDay=0으로 '저장' 탭 시 help '하루 근무시간은 1시간 이상이어야 해요'가 표시되고 navigate(-1)가 호출되지 않아야 한다(S2-AC4)",
+        "유효 입력으로 저장 성공 시 wdv_profile_v1이 갱신되고 Toast '저장했어요'가 표시된 뒤 navigate(-1)가 호출되어야 한다(S2-AC2)",
+        "저장 시 QuotaExceededError 결과를 받으면 AlertDialog 제목 '저장 실패' + 본문 '저장 공간이 부족해 저장할 수 없어요'가 떠야 하고 wdv_profile_v1이 변경되지 않아야 한다(S2-AC5)"
+      ]
+    },
+    "covers": [
+      "S2-AC1",
+      "S2-AC2",
+      "S2-AC3",
+      "S2-AC4",
+      "S2-AC5"
+    ],
+    "files": [
+      "src/pages/Settings.tsx"
+    ],
+    "definition_of_done": [
+      "저장 버튼은 disabled 조건(isSavingProfile 등)으로 중복 저장 차단",
+      "고정 CTA 영역에 safe-area-inset-bottom padding 적용"
+    ],
+    "depends_on": [
+      "0006"
+    ],
+    "db_schema": "",
+    "api_contract": "",
+    "dependencies": [
+      "@apps-in-toss/framework"
+    ],
+    "ui_requirements": "## Screen: 급여/근무 설정 (`/settings`)\n\n### Layout\n```tsx\n<Top title={<Top.TitleParagraph>급여/근무 설정</Top.TitleParagraph>} />\n\n<Spacing size={16} />\n<Paragraph.Text typography=\"st6\" color=\"tertiary\">내 급여와 근무조건을 저장해두면 바로 계산할 수 있어요</Paragraph.Text>\n\n<Spacing size={16} />\n<TextField variant=\"box\" label=\"급여(원)\" value={payAmount} onChange={...} />\n<Spacing size={12} />\n<TextField variant=\"box\" label=\"하루 근무시간(시간)\" value={workHoursPerDay} onChange={...} />\n\n<Spacing size={16} />\n<ListRow\n  contents={<ListRow.Texts type=\"2RowTypeA\" top=\"주말 근무도 포함해요\" bottom=\"주 7일 기준으로 나눠서 계산해요\" />}\n  right={<Toggle checked={includeWeekend} onChange={...} />}\n/>\n\n<Spacing size={24} />\n<div style={{ position: 'fixed', bottom: 0, left: 0, right: 0, padding: 16, paddingBottom: 'calc(16px + env(safe-area-inset-bottom))', backgroundColor: 'var(--tds-color-background)' }}>\n  <Button variant=\"fill\" size=\"large\" onClick={handleSave}>저장</Button>\n</div>\n\n<Toast open={savedToastOpen} position=\"bottom\" onClose={...} />\n\n<AlertDialog\n  open={quotaDialogOpen}\n  title=\"저장 실패\"\n  description=\"저장 공간이 부족해 저장할 수 없어요\"\n  alertButton={<AlertDialog.AlertButton onClick={() => setQuotaDialogOpen(false)}>닫기</AlertDialog.AlertButton>}\n  onClose={() => setQuotaDialogOpen(false)}\n/>\n```\n\n### States\n- Loading:\n  - `Paragraph.Text typography=\"st6\"`: `\"불러오는 중...\"`\n- Empty(최초 진입 가이드):\n  - 상단 가이드 문구 유지 + 입력값 기본 공란/기본값\n- Error(저장 실패):\n  - AlertDialog `\"저장 실패\" / \"저장 공간이 부족해 저장할 수 없어요\"`\n\n### Interactions\n- `\"저장\"` 탭: `generateHapticFeedback({ type: 'success' })`\n  - 급여 0이면 TextField help `\"급여를 1원 이상 입력해주세요\"`, 저장/뒤로가기 없음\n  - 근무시간 0이면 help `\"하루 근무시간은 1시간 이상이어야 해요\"`, 저장/뒤로가기 없음\n  - 성공 시 Toast `\"저장했어요\"` 노출 후 `navigate(-1)`\n- Toggle 전환: `generateHapticFeedback({ type: 'tickWeak' })`\n- 키보드로 CTA가 가리면 스크롤 가능(고정 CTA는 safe-area 포함)\n"
+  },
+  {
+    "id": "0009",
+    "title": "페이지: 결과 /result (기본 결과 + 리워드 광고 게이트 상세 + 애니메이션)",
+    "epic": "Epic 2 (Pages)",
+    "task": {
+      "description": "calcId로 기록을 로드해 금액/요약을 보여줘요. calcId 누락/기록 없음이면 Empty 상태를 렌더링해요. '상세 환산 보기'는 TossRewardAd로 게이트하고, 광고 실패 시 토스트를 띄우고 기본 결과는 계속 보여줘요. 상세 섹션은 카운트업 애니메이션을 사용해요.",
+      "acceptance_criteria": [
+        "calcId 조회가 완료되지 않았을 때 Paragraph.Text '불러오는 중...'이 존재해야 한다(S3-AC1)",
+        "location.state가 없거나 calcId 기록이 없으면 '결과를 찾을 수 없어요'가 보이고 '홈으로' 탭 시 navigate('/')가 호출되어야 한다(S3-AC2)",
+        "유효 calcId로 진입 시 formatKRW가 적용된 금액 텍스트(예: '60,000원')와 '몇 시간 노동값' 요약 문구가 동시에 존재해야 한다(S3-AC3)",
+        "리워드 광고 로드 실패 이벤트가 발생하면 Toast '광고를 불러오지 못했어요'가 표시되고 기본 결과 섹션 DOM은 유지되어야 한다(S3-AC4)",
+        "광고 시청 완료 전에는 상세(초/분 단위) 섹션 DOM이 존재하지 않아야 한다(S3-AC5)"
+      ]
+    },
+    "covers": [
+      "S3-AC1",
+      "S3-AC2",
+      "S3-AC3",
+      "S3-AC4",
+      "S3-AC5"
+    ],
+    "files": [
+      "src/pages/Result.tsx"
+    ],
+    "definition_of_done": [
+      "기본 결과 카드 아래 AdSlot 배치",
+      "AI 결과물 표시가 포함되는 경우(스캔 출처 등) 상세/요약 근처에 'AI가 생성한 결과입니다' 라벨 표시"
+    ],
+    "depends_on": [
+      "0006"
+    ],
+    "db_schema": "",
+    "api_contract": "",
+    "dependencies": [],
+    "ui_requirements": "## Screen: 결과 (`/result`)\n\n### Layout\n```tsx\n<Top title={<Top.TitleParagraph>계산 결과</Top.TitleParagraph>} />\n\n<Spacing size={16} />\n<div style={{ backgroundColor: 'var(--tds-color-grey50)', borderRadius: 16, padding: 20 }}>\n  <Paragraph.Text typography=\"st11\" color=\"secondary\">요약</Paragraph.Text>\n  <Spacing size={8} />\n  <Paragraph.Text typography=\"t1\">{amountText}</Paragraph.Text>\n  <Spacing size={4} />\n  <Paragraph.Text typography=\"st8\" color=\"tertiary\">{hourSummaryText}</Paragraph.Text>\n</div>\n\n<Spacing size={16} />\n<AdSlot />\n\n<Spacing size={16} />\n```\n\n### States\n- Loading:\n  - `Paragraph.Text`: `\"불러오는 중...\"`\n- Empty:\n  - `Paragraph.Text`: `\"결과를 찾을 수 없어요\"`\n  - `Button`: `\"홈으로\"`\n- Error:\n  - 리워드 광고 실패 시 Toast `\"광고를 불러오지 못했어요\"` + 기본 결과 유지\n\n### Interactions\n- `\"상세 환산 보기\"` 버튼 탭 시 상세 섹션을 `TossRewardAd`로 게이트\n  - 광고 완료 전: 상세(초 단위 등) DOM 미렌더\n  - 광고 실패 이벤트: Toast 노출 후 상세는 열리지 않으며 기본 결과는 유지\n- 상세 수치(분/초)는 `animateCountUp`으로 0→목표값 카운트업\n"
+  },
+  {
+    "id": "0010",
+    "title": "페이지: 스캔 /scan (AI 고지 1회 + 인식 로딩/중복요청 방지 + AI 라벨)",
+    "epic": "Epic 2 (Pages)",
+    "task": {
+      "description": "이미지 파일을 선택해 가격 인식을 요청하고, 인식된 금액을 TextField로 수정한 뒤 계산 기록을 생성해요. 첫 이용 시 1회 AI 고지 다이얼로그 확인 후 진행하며, 인식 중에는 '인식 중...' 표시 + 버튼 disabled로 중복 요청을 1회로 제한해요. 실패 시 토스트로 안내해요.",
+      "acceptance_criteria": [
+        "wdv_ai_notice_v1이 없을 때 '사진으로 인식하기' 트리거 탭 시 AlertDialog에 '이 서비스는 생성형 AI를 활용합니다' 문구가 표시되고, '확인' 탭 후 wdv_ai_notice_v1.scanAiNoticeAcknowledged===true가 저장되어야 한다(S4-AC1)",
+        "이미지 1장을 선택해 인식 요청 중이면 Paragraph.Text '인식 중...'이 존재하고, 파일 선택 트리거 버튼이 disabled여야 하며, 같은 세션에서 추가 탭이 발생해도 recognizePrice 호출 횟수는 1회여야 한다(S4-AC2)",
+        "인식 결과가 화면에 노출될 때 'AI가 생성한 결과입니다' 라벨 텍스트가 함께 존재해야 한다(정적 문구 존재 여부로 판정)",
+        "인식 API 실패(status>=400 또는 네트워크 에러) 시 Toast '가격 인식에 실패했어요. 직접 입력해 주세요'가 표시되어야 한다"
+      ]
+    },
+    "covers": [
+      "S4-AC1",
+      "S4-AC2"
+    ],
+    "files": [
+      "src/pages/Scan.tsx"
+    ],
+    "definition_of_done": [
+      "파일 input은 accept='image/*' capture='environment'를 사용하고 Button으로 트리거",
+      "인식 후 금액 TextField focus 시 scrollIntoView({block:'center'}) 호출"
+    ],
+    "depends_on": [
+      "0006"
+    ],
+    "db_schema": "",
+    "api_contract": "POST /api/scan/extract-price (multipart/form-data) → 200 { detectedAmountKRW?:number, amountKRW?:number }",
+    "dependencies": [
+      "@apps-in-toss/framework"
+    ],
+    "ui_requirements": "TDS Top, Button, TextField, Paragraph.Text, Spacing, Toast, AlertDialog, BottomSheet, Chip 사용.\n\n- 상단: <Top title={<Top.TitleParagraph>사진으로 가격 인식</Top.TitleParagraph>} />\n- 본문 상태:\n  - Empty(미선택): Paragraph.Text로 안내 문구(예: '영수증/가격표 사진을 올려줘요')\n  - Loading(인식 중): Paragraph.Text '인식 중...' + 트리거 Button disabled\n  - Success: 인식된 금액 TextField(variant='box', inputMode='numeric') + 라벨 'AI가 생성한 결과입니다'\n- 버튼:\n  - '사진으로 인식하기' Button이 file input 클릭을 트리거\n  - '이 금액으로 계산' Button 탭 시 CalcRecord 생성 후 navigate('/result',{state:{calcId}})\n- AI 고지:\n  - 최초 1회 AlertDialog에 '이 서비스는 생성형 AI를 활용합니다' 문구 + 확인 버튼(닫기 문구는 '닫기' 금지, 확인은 '확인')\n- 오류:\n  - API 실패 시 Toast '가격 인식에 실패했어요. 직접 입력해 주세요'\n"
+  },
+  {
+    "id": "0011",
+    "title": "페이지(스텁): 고정지출 /fixed-expenses",
+    "epic": "Epic 2 (Pages)",
+    "task": {
+      "description": "SPEC가 대화 내에서 S5 이후가 잘려 있으므로, 라우트 컴파일/탐색을 위한 최소 스텁 화면을 구현해요. Top 타이틀과 '홈으로' 또는 '뒤로' 이동 버튼만 제공하고, 기능 구현은 추후 SPEC 전체 제공 시 확장 가능하게 구성해요.",
+      "acceptance_criteria": [
+        "/fixed-expenses 진입 시 Top 타이틀이 렌더링되어야 한다",
+        "화면에 Paragraph.Text '준비 중이에요'가 존재해야 한다",
+        "'홈으로' 버튼 탭 시 navigate('/')가 호출되어야 한다"
+      ]
+    },
+    "covers": [],
+    "files": [
+      "src/pages/FixedExpenses.tsx"
+    ],
+    "definition_of_done": [
+      "TDS 컴포넌트만 사용(Top/Paragraph.Text/Button/Spacing)",
+      "터치 타겟 44px(기본 Button)"
+    ],
+    "depends_on": [
+      "0006"
+    ],
+    "db_schema": "",
+    "api_contract": "",
+    "dependencies": [],
+    "ui_requirements": "TDS Top, Paragraph.Text, Button, Spacing.\n- <Top title={<Top.TitleParagraph>고정지출</Top.TitleParagraph>} />\n- Paragraph.Text: '준비 중이에요'\n- Button(weak 또는 fill): '홈으로' → navigate('/')\n"
+  },
+  {
+    "id": "0012",
+    "title": "페이지(스텁): 목표저축 /savings-goal",
+    "epic": "Epic 2 (Pages)",
+    "task": {
+      "description": "목표 저축 화면 정의가 제공 본문에서 누락되어 있어, 우선 라우팅 검증용 최소 UI만 구현해요. Top/안내문/홈 이동 버튼으로 구성하고, 이후 SPEC 전체가 제공되면 입력/리워드 게이트 상세 등으로 확장할 수 있게 파일 구조를 고정해요.",
+      "acceptance_criteria": [
+        "/savings-goal 진입 시 Top 타이틀이 렌더링되어야 한다",
+        "Paragraph.Text '준비 중이에요'가 화면에 존재해야 한다",
+        "'홈으로' 버튼 탭 시 navigate('/')가 호출되어야 한다"
+      ]
+    },
+    "covers": [],
+    "files": [
+      "src/pages/SavingsGoal.tsx"
+    ],
+    "definition_of_done": [
+      "TDS 컴포넌트만 사용",
+      "컴파일 통과"
+    ],
+    "depends_on": [
+      "0006"
+    ],
+    "db_schema": "",
+    "api_contract": "",
+    "dependencies": [],
+    "ui_requirements": "TDS Top, Paragraph.Text, Button, Spacing.\n- <Top title={<Top.TitleParagraph>목표 저축</Top.TitleParagraph>} />\n- Paragraph.Text: '준비 중이에요'\n- Button: '홈으로' → navigate('/')\n"
+  },
+  {
+    "id": "0013",
+    "title": "페이지(스텁): 기록 /history",
+    "epic": "Epic 2 (Pages)",
+    "task": {
+      "description": "기록 화면 상세 정의(S7)가 본문에서 누락되어 있어, 우선 라우트 접근과 기본 목록 뼈대를 위한 최소 화면을 구현해요. Top/안내문/홈 이동만 제공하고, 추후 가상 스크롤·필터·결과 이동을 추가할 수 있도록 파일을 분리해둬요.",
+      "acceptance_criteria": [
+        "/history 진입 시 Top 타이틀이 렌더링되어야 한다",
+        "Paragraph.Text '준비 중이에요'가 화면에 존재해야 한다",
+        "'홈으로' 버튼 탭 시 navigate('/')가 호출되어야 한다"
+      ]
+    },
+    "covers": [],
+    "files": [
+      "src/pages/History.tsx"
+    ],
+    "definition_of_done": [
+      "TDS 컴포넌트만 사용",
+      "컴파일 통과"
+    ],
+    "depends_on": [
+      "0006"
+    ],
+    "db_schema": "",
+    "api_contract": "",
+    "dependencies": [],
+    "ui_requirements": "TDS Top, Paragraph.Text, Button, Spacing.\n- <Top title={<Top.TitleParagraph>기록</Top.TitleParagraph>} />\n- Paragraph.Text: '준비 중이에요'\n- Button: '홈으로' → navigate('/')\n"
+  },
+  {
+    "id": "0014",
+    "title": "페이지(스텁): 공유 /share",
+    "epic": "Epic 2 (Pages)",
+    "task": {
+      "description": "공유 화면 정의(S8)가 본문에서 누락되어 있어, calcId를 받는 라우트 계약만 우선 적용한 최소 화면을 구현해요. location.state가 없으면 Empty 안내와 홈 이동을 제공하고, state가 있으면 '준비 중이에요'를 표시해요.",
+      "acceptance_criteria": [
+        "/share 진입 시 Top 타이틀이 렌더링되어야 한다",
+        "location.state가 없을 때 '공유할 결과가 없어요' 문구가 존재하고 '홈으로' 탭 시 navigate('/')가 호출되어야 한다",
+        "location.state.calcId가 있을 때 Paragraph.Text '준비 중이에요'가 존재해야 한다"
+      ]
+    },
+    "covers": [],
+    "files": [
+      "src/pages/Share.tsx"
+    ],
+    "definition_of_done": [
+      "RouteState['/share'] 타입으로 location.state를 해석",
+      "TDS 컴포넌트만 사용"
+    ],
+    "depends_on": [
+      "0001"
+    ],
+    "db_schema": "",
+    "api_contract": "",
+    "dependencies": [],
+    "ui_requirements": "TDS Top, Paragraph.Text, Button, Spacing.\n- <Top title={<Top.TitleParagraph>공유</Top.TitleParagraph>} />\n- Empty: Paragraph.Text '공유할 결과가 없어요' + Button '홈으로'\n- Normal: Paragraph.Text '준비 중이에요'\n"
+  },
+  {
+    "id": "0015",
+    "title": "페이지(스텁): 비교 /compare",
+    "epic": "Epic 2 (Pages)",
+    "task": {
+      "description": "비교 화면 정의(S9)가 본문에서 누락되어 있어, baseCalcId를 받는 라우트 계약만 적용한 최소 화면을 구현해요. location.state가 없으면 Empty 안내와 홈 이동을 제공하고, state가 있으면 '준비 중이에요'를 표시해요.",
+      "acceptance_criteria": [
+        "/compare 진입 시 Top 타이틀이 렌더링되어야 한다",
+        "location.state가 없을 때 '비교할 기준 결과가 없어요' 문구가 존재하고 '홈으로' 탭 시 navigate('/')가 호출되어야 한다",
+        "location.state.baseCalcId가 있을 때 Paragraph.Text '준비 중이에요'가 존재해야 한다"
+      ]
+    },
+    "covers": [],
+    "files": [
+      "src/pages/Compare.tsx"
+    ],
+    "definition_of_done": [
+      "RouteState['/compare'] 타입으로 location.state를 해석",
+      "컴파일 통과"
+    ],
+    "depends_on": [
+      "0001"
+    ],
+    "db_schema": "",
+    "api_contract": "",
+    "dependencies": [],
+    "ui_requirements": "TDS Top, Paragraph.Text, Button, Spacing.\n- <Top title={<Top.TitleParagraph>비교</Top.TitleParagraph>} />\n- Empty: Paragraph.Text '비교할 기준 결과가 없어요' + Button '홈으로'\n- Normal: Paragraph.Text '준비 중이에요'\n"
+  },
+  {
+    "id": "0016",
+    "title": "Integration: Vite 프록시(옵션)로 /api 스캔 CORS 완화",
+    "epic": "Epic 3 (Integration)",
+    "task": {
+      "description": "개발/검증 환경에서 스캔 API 호출 CORS 리스크를 줄이기 위해, VITE_SCAN_API_ORIGIN 환경변수가 있을 때만 /api 요청을 해당 origin으로 프록시하도록 vite.config.ts를 구성해요. 값이 없으면 프록시는 비활성화되어야 해요.",
+      "acceptance_criteria": [
+        "vite.config.ts가 TypeScript로 컴파일되어 dev server가 정상 기동되어야 한다",
+        "process.env/VITE_SCAN_API_ORIGIN(또는 loadEnv로 읽은 값)이 truthy일 때만 server.proxy['/api']가 정의되어야 한다",
+        "환경변수가 falsy일 때 server.proxy에 '/api' 엔트리가 없어야 한다"
+      ]
+    },
+    "covers": [],
+    "files": [
+      "vite.config.ts"
+    ],
+    "definition_of_done": [
+      "기본 동작(프록시 없음)에서도 recognizePrice('/api/...')가 동일 오리진으로 요청됨",
+      "빌드/개발 서버 실행 가능"
+    ],
+    "depends_on": [
+      "0010"
+    ],
+    "db_schema": "",
+    "api_contract": "",
+    "dependencies": [],
+    "ui_requirements": ""
+  },
+  {
+    "id": "0017",
+    "title": "Integration: App.tsx 라우팅 + Provider 연결(모든 Route 정의)",
+    "epic": "Epic 3 (Integration)",
+    "task": {
+      "description": "React Router로 모든 경로를 연결하고 AppStoreProvider를 최상단에 배치해요. '/', '/settings', '/result', '/scan' 및 스텁 페이지 라우트까지 포함해 컴파일/탐색이 가능해야 해요. main.tsx는 수정하지 않아요.",
+      "acceptance_criteria": [
+        "App.tsx에서 BrowserRouter(또는 Router) + Routes로 9개 경로('/', '/settings', '/result', '/scan', '/fixed-expenses', '/savings-goal', '/history', '/share', '/compare')가 모두 매핑되어야 한다",
+        "각 경로로 직접 진입했을 때(브라우저 주소창) 빈 화면/에러 없이 해당 페이지 컴포넌트가 렌더링되어야 한다",
+        "AppStoreProvider가 라우터 하위에 1회만 래핑되어야 한다"
+      ]
+    },
+    "covers": [],
+    "files": [
+      "src/App.tsx"
+    ],
+    "definition_of_done": [
+      "라우트별 컴포넌트 import 경로 정리",
+      "TypeScript build 통과"
+    ],
+    "depends_on": [
+      "0007",
+      "0008",
+      "0009",
+      "0010",
+      "0011",
+      "0012",
+      "0013",
+      "0014",
+      "0015"
+    ],
+    "db_schema": "",
+    "api_contract": "",
+    "dependencies": [],
+    "ui_requirements": "- App.tsx는 라우팅만 우선 연결(탭바/폴리시는 다음 패킷에서).\n- React Router DOM 사용.\n- 각 페이지는 mobile viewport 기준으로 기본 스크롤이 가능해야 함."
+  },
+  {
+    "id": "0018",
+    "title": "Integration: App.tsx TabBar(하단 고정) + 전역 UX 폴리시/폴리시",
+    "epic": "Epic 3 (Integration)",
+    "task": {
+      "description": "메인 내비게이션을 TDS TabBar로 제공해요(2~5개 탭). TabBar는 하단 고정(fixed) + safe-area-inset-bottom을 포함하고, 토스 하단 영역과 겹치지 않게 여백을 확보해요. 탭 전환은 navigate로만 처리해요.",
+      "acceptance_criteria": [
+        "App.tsx에 TDS TabBar가 렌더링되고 탭 개수가 2~5개여야 한다",
+        "TabBar 컨테이너가 position:fixed 하단이며 paddingBottom에 'env(safe-area-inset-bottom)'이 포함되어야 한다(문자열 포함 여부로 판정)",
+        "각 탭 탭 시 해당 라우트로 navigate가 호출되어 URL 경로가 변경되어야 한다"
+      ]
+    },
+    "covers": [],
+    "files": [
+      "src/App.tsx"
+    ],
+    "definition_of_done": [
+      "탭 라벨은 한국어(예: 홈/스캔/기록/설정)",
+      "TDS 색상 토큰만 사용(HEX 금지)"
+    ],
+    "depends_on": [
+      "0017"
+    ],
+    "db_schema": "",
+    "api_contract": "",
+    "dependencies": [],
+    "ui_requirements": "TDS TabBar 사용.\n- 탭 예시(총 4개): 홈(/), 스캔(/scan), 기록(/history), 설정(/settings)\n- TabBar는 하단 고정 + safe area:\n  - style: { position:'fixed', left:0, right:0, bottom:0, paddingBottom:'calc(12px + env(safe-area-inset-bottom))', backgroundColor:'var(--tds-color-background)' }\n- 본문 영역이 TabBar에 가리지 않도록 App 레이아웃에서 하단 여백을 확보(Spacing 또는 wrapper paddingBottom은 레이아웃 목적일 때만 사용)"
+  },
+  {
+    "id": "0019",
+    "title": "라우팅 와이어링 + Provider 연결 + 통합 폴리시",
+    "epic": "4",
+    "task": {
+      "description": "App.tsx에 모든 페이지(Home.tsx, Settings.tsx, Result.tsx, Scan.tsx, FixedExpenses.tsx, SavingsGoal.tsx, History.tsx, Share.tsx, Compare.tsx) Route 연결, main.tsx 수정 금지(@AI:ANCHOR), 광고/결제 연동, 최종 UX 폴리시",
+      "acceptance_criteria": [
+        "App.tsx에 모든 페이지 Route가 정의되어 있다",
+        "모든 navigate() 대상에 Route가 존재한다",
+        "main.tsx의 ThemeProvider/BrowserRouter가 유지되어 있다",
+        "앱이 '/' 경로에서 정상 렌더링된다"
+      ]
+    },
+    "files": [
+      "src/App.tsx"
+    ],
+    "covers": [],
+    "definition_of_done": [
+      "typecheck pass",
+      "all routes accessible",
+      "no console errors"
+    ],
+    "depends_on": [
+      "0018"
+    ]
+  }
+]
