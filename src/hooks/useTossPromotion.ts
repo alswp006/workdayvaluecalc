@@ -1,12 +1,10 @@
 import { useState, useCallback } from 'react';
+import { grantPromotionReward } from '@apps-in-toss/web-framework';
 
-const isTossApp = typeof window !== 'undefined' && !!(window as unknown as Record<string, unknown>).Toss;
-
-/** 프로모션 리워드 요청 파라미터 */
 interface PromotionRewardRequest {
-  /** 프로모션 코드 (콘솔에서 발급) */
+  /** 앱인토스 콘솔에서 발급받은 프로모션 코드 */
   promotionCode: string;
-  /** 지급 포인트 (1인당 최대 5,000원) */
+  /** 지급 포인트 — 1인당 최대 5,000원 제한 */
   amount: number;
 }
 
@@ -16,13 +14,11 @@ interface PromotionRewardResult {
 }
 
 /**
- * 토스 프로모션 리워드 SDK 연동 hook.
+ * 프로모션 리워드 훅.
+ * grantPromotionReward SDK (v2.0.8+)로 유저에게 포인트를 지급한다.
+ * amount > 5000 호출 시 즉시 실패를 반환하며 SDK를 호출하지 않는다.
  *
- * grantPromotionReward — @apps-in-toss/web-framework SDK v2.0.8+
- * 앱인토스 콘솔에서 생성한 프로모션 코드로 유저에게 포인트를 지급한다.
- * 1인당 최대 5,000원 제한.
- *
- * 참고: https://developers-apps-in-toss.toss.im/bedrock/reference/framework/게임/grantPromotionRewardForGame.html
+ * 실제 지급은 앱인토스 WebView 환경에서만 동작한다.
  */
 export function useTossPromotion() {
   const [loading, setLoading] = useState(false);
@@ -40,16 +36,8 @@ export function useTossPromotion() {
       return result;
     }
 
-    if (!isTossApp) {
-      // 개발 환경: 시뮬레이션
-      const result: PromotionRewardResult = { success: true };
-      setLastResult(result);
-      return result;
-    }
-
     setLoading(true);
     try {
-      const { grantPromotionReward } = await import('@apps-in-toss/web-framework');
       await grantPromotionReward({ params: { promotionCode: req.promotionCode, amount: req.amount } });
       const result: PromotionRewardResult = { success: true };
       setLastResult(result);

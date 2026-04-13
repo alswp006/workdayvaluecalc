@@ -26,14 +26,22 @@ NEVER hardcode non-existent old versions (e.g., `^1.0.0`). Toss packages on publ
 
 ## 5. Core API & SDK Integration
 NEVER build Toss features from scratch. Always call the SDK APIs.
+If .ai-factory/apps-in-toss-essential.txt exists, read it FIRST before writing any SDK-related code.
+
+**SDK 훅 환각 금지**: `useTossLogin`, `useTossPayment`, `useTossAd` 같은 React 훅은 SDK에 존재하지 않는다. `window.Toss.xxx` 패턴도 금지.
+
 - **WebView control:** Configure swipe back (`allowsBackForwardNavigationGestures`), bounce (`bounces`), autoplay (`mediaPlaybackRequiresUserAction`) via `webViewProps`.
 - **Haptic feedback:** Use SDK haptics for button interactions:
   ```typescript
-  import { generateHapticFeedback } from '@apps-in-toss/framework';
+  import { generateHapticFeedback } from '@apps-in-toss/web-framework';
   generateHapticFeedback({ type: "tickWeak" });
   ```
-- **Storage:** Use Toss native storage hooks (SDK `setItem`, `getItem`) for user data persistence.
-- **Promotion:** `grantPromotionReward` SDK (v2.0.8+, `@apps-in-toss/web-framework`) — 유저에게 포인트 지급.
+- **Storage (native):** `Storage.getItem(key)` / `Storage.setItem(key, value)` from `@apps-in-toss/web-framework` — Promise 기반. 앱 재시작 후에도 유지.
+- **Ads (배너):** `TossAds.initialize({})` → `TossAds.attachBanner(adGroupId, domElement)` from `@apps-in-toss/web-bridge`
+- **Ads (리워드):** `loadFullScreenAd(...)` → `showFullScreenAd(...)` from `@apps-in-toss/web-bridge`. `userEarnedReward` 이벤트로 보상 감지.
+- **Payment:** `IAP.createOneTimePurchaseOrder({ options: { sku, processProductGrant }, onEvent, onError })` from `@apps-in-toss/web-framework`
+- **Auth:** Toss 앱 세션 자동 신뢰. 로그인 구현 불필요. 통합 여부 확인만: `getIsTossLoginIntegratedService()`
+- **Promotion:** `grantPromotionReward({ params: { promotionCode, amount } })` from `@apps-in-toss/web-framework`
   - 1인당 최대 5,000원 제한 (amount > 5000 호출 금지)
   - `promotionCode`는 앱인토스 콘솔에서 발급받은 코드 사용 필수
   - 활용: 첫 사용 보상, 친구 초대 리워드, 이벤트 참여 보상

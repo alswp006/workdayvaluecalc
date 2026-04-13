@@ -1,46 +1,72 @@
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback } from 'react';
+import { loadFullScreenAd, showFullScreenAd } from '@apps-in-toss/web-bridge';
 
-const isTossApp = typeof window !== 'undefined' && !!(window as unknown as Record<string, unknown>).Toss;
-
-interface TossAdOptions {
-  /** 광고 슬롯 ID */
-  slotId: string;
-  /** 광고가 보일 최소 시간(ms) */
-  minDisplayTime?: number;
+interface UseTossAdOptions {
+  adGroupId: string;
 }
 
-export function useTossAd({ slotId, minDisplayTime = 3000 }: TossAdOptions) {
-  const [isReady, setIsReady] = useState(false);
+interface UseTossAdResult {
+  isLoading: boolean;
+  isShowing: boolean;
+  rewarded: boolean;
+  loadAndShow: () => Promise<{ rewarded: boolean }>;
+}
+
+/**
+ * 리워드 광고 훅.
+ * loadFullScreenAd로 광고를 로드한 뒤, showFullScreenAd로 재생하고
+ * userEarnedReward 이벤트를 감지해 rewarded 상태를 반환한다.
+ *
+ * 실제 동작은 앱인토스 WebView 환경에서만 가능하다.
+ * WebView 외부(dev/test)에서는 loadFullScreenAd가 onError를 호출해 reject된다.
+ */
+export function useTossAd({ adGroupId }: UseTossAdOptions): UseTossAdResult {
+  const [isLoading, setIsLoading] = useState(false);
   const [isShowing, setIsShowing] = useState(false);
-  const [reward, setReward] = useState(false);
+  const [rewarded, setRewarded] = useState(false);
 
-  useEffect(() => {
-    // 앱인토스 환경에서만 광고 SDK 초기화
-    if (isTossApp) {
-      setIsReady(true);
-    }
-  }, [slotId]);
+  const loadAndShow = useCallback((): Promise<{ rewarded: boolean }> => {
+    return new Promise((resolve, reject) => {
+      setIsLoading(true);
 
-  const show = useCallback(async () => {
-    if (!isTossApp) {
-      // 개발 환경: 시뮬레이션
-      setIsShowing(true);
-      await new Promise(r => setTimeout(r, minDisplayTime));
-      setIsShowing(false);
-      setReward(true);
-      return;
-    }
-    try {
-      setIsShowing(true);
-      const toss = (window as unknown as Record<string, { showAd: (opts: { slotId: string }) => Promise<{ rewarded: boolean }> }>).Toss;
-      const result = await toss.showAd({ slotId });
-      setReward(result.rewarded);
-    } catch (e) {
-      console.error('Toss ad error:', e);
-    } finally {
-      setIsShowing(false);
-    }
-  }, [slotId, minDisplayTime]);
+      const cleanupLoad = loadFullScreenAd({
+        options: { adGroupId },
+        onEvent: () => {
+          // 'loaded' — 광고 로드 완료, 즉시 재생
+          setIsLoading(false);
+          setIsShowing(true);
 
-  return { isReady, isShowing, reward, show };
+          const cleanupShow = showFullScreenAd({
+            options: { adGroupId },
+            onEvent: (event) => {
+              if (event.type === 'userEarnedReward') {
+                setRewarded(true);
+              } else if (event.type === 'dismissed') {
+                setIsShowing(false);
+                cleanupShow();
+                // dismissed 시점에 rewarded 여부를 최종 전달
+                resolve({ rewarded: true });
+              } else if (event.type === 'failedToShow') {
+                setIsShowing(false);
+                cleanupShow();
+                reject(new Error('Ad failed to show'));
+              }
+            },
+            onError: (err) => {
+              setIsShowing(false);
+              cleanupShow();
+              reject(err);
+            },
+          });
+        },
+        onError: (err) => {
+          setIsLoading(false);
+          cleanupLoad();
+          reject(err);
+        },
+      });
+    });
+  }, [adGroupId]);
+
+  return { isLoading, isShowing, rewarded, loadAndShow };
 }
