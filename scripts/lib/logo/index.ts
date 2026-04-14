@@ -26,6 +26,7 @@ export async function generateLogo(config: LogoConfig): Promise<LogoResult> {
     const generated = await tryGenerate({
       englishName: config.englishName,
       conceptDescription: config.logo.conceptDescription,
+      backgroundColor: config.logo.backgroundColor,
     });
 
     if (generated.ok) {
