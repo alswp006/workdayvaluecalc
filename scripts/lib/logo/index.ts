@@ -16,6 +16,8 @@ export interface LogoConfig {
   englishName: string;
   logo: {
     conceptDescription: string;
+    /** 배경색 지정 (앱 primaryColor 권장). 미지정 시 appName 해시로 결정. */
+    backgroundColor?: string;
   };
 }
 
@@ -40,7 +42,11 @@ export async function generateLogo(config: LogoConfig): Promise<LogoResult> {
     }
   }
 
-  const template = await composeTemplate(config);
+  const template = await composeTemplate({
+    appName: config.appName,
+    englishName: config.englishName,
+    backgroundColor: config.logo.backgroundColor,
+  });
 
   // 템플릿은 항상 검증 통과해야 함 — 실패 시 버그
   const validation = await validateLogo(template);

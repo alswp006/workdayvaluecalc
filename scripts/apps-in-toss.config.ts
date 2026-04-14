@@ -8,6 +8,7 @@ const config: AppsInTossConfig = {
   supportEmail: 'support@aifactory.dev',
   logo: {
     conceptDescription: '시계와 지갑이 결합된 단순한 아이콘, 노동 시간과 소비 가치를 상징',
+    backgroundColor: '#3182F6', // 토스 브랜드 primary (granite.config.ts primaryColor)
   },
 };
 

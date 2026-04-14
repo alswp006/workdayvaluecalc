@@ -47,13 +47,16 @@ export function extractInitials(englishName: string): string {
  * 600×600 원형 PNG 아이콘 합성
  * 1. SVG로 배경색 + 이니셜 텍스트 레이어 생성
  * 2. 원형 마스크를 dest-in 합성 → 모서리 투명
+ *
+ * backgroundColor: 명시적으로 지정하면 해시 팔레트 대신 사용 (앱 primaryColor 권장)
  */
 export async function composeTemplate(config: {
   appName: string;
   englishName: string;
+  backgroundColor?: string;
 }): Promise<Buffer> {
   const SIZE = 600;
-  const bg = pickColor(config.appName);
+  const bg = config.backgroundColor ?? pickColor(config.appName);
   const initials = extractInitials(config.englishName);
   const fontSize = Math.round(SIZE * 0.38);
 
