@@ -29,17 +29,20 @@
 - Data storage: localStorage or Toss native storage SDK only (or external API via fetch)
 
 ## App-in-Toss SDK Required
-- Auth: useTossLogin hook (custom auth implementation forbidden)
-- Payment: useTossPayment hook (Stripe and external payment forbidden)
-- Ads: useTossAd hook, AdSlot component, or TossRewardAd gate component
-- Reward Ad Pattern: TossRewardAd wraps content behind ad viewing. Use for result/analysis screens:
-  `<TossRewardAd slotId="result-unlock"><ResultContent /></TossRewardAd>`
-  Only gate the final payoff moment — never intermediate steps or navigation
-- Promotion: useTossPromotion hook — grantPromotionReward SDK (v2.0.8+)로 유저에게 포인트 지급
+- If .ai-factory/apps-in-toss-essential.txt exists, read it FIRST — it is the verified SDK API surface
+- **SDK 훅은 존재하지 않는다**: `useTossLogin`, `useTossPayment`, `useTossAd` 같은 React 훅은 SDK에 없음 → 절대 생성 금지
+- **window.Toss.xxx 패턴 금지**: 구식/환각 패턴. SDK는 named export 함수만 제공함
+- Auth: Toss 앱 세션 자동 신뢰. 로그인 상태 확인만 필요하면 `getIsTossLoginIntegratedService()` 사용
+- Payment: `IAP.createOneTimePurchaseOrder({ options: { sku }, processProductGrant, onEvent, onError })` — Stripe/외부 결제 금지
+- Ads (배너): `TossAds.initialize({})` → `TossAds.attachBanner(adGroupId, domElement)` — 직접 DOM에 부착
+- Ads (리워드): `loadFullScreenAd({ options: { adGroupId }, onEvent, onError })` → `showFullScreenAd(...)` — `userEarnedReward` 이벤트로 보상 감지
+- Reward Ad Pattern: `TossRewardAd`는 `src/components/`에 직접 구현하는 로컬 래퍼 컴포넌트 (SDK 컴포넌트 아님)
+  - adGroupId prop 필수: `<TossRewardAd adGroupId="console-issued-id"><ResultContent /></TossRewardAd>`
+  - Only gate the final payoff moment — never intermediate steps or navigation
+- Promotion: `grantPromotionReward({ params: { promotionCode, amount } })` — `@apps-in-toss/web-framework`에서 직접 import
   - 1인당 최대 5,000원 제한 (amount > 5000 호출 금지)
   - promotionCode는 앱인토스 콘솔에서 발급받은 코드 사용 필수
-  - 활용: 첫 사용 보상, 친구 초대 리워드, 이벤트 참여 보상
-- Navigation: NEVER use window.location.href for external URLs → use Toss SDK navigation
+- Navigation: NEVER use window.location.href for external URLs → `openURL(supertoss://...)` 사용
 
 ## 인앱광고 수수료 정책 (2026.04.01~)
 - 인앱광고(IAA) 수수료 15% 적용 — 수익 관련 UI에 순수익/총수익 구분 표시 권장
@@ -48,7 +51,7 @@
 
 ## Native Vibe (토스 네이티브 품질 필수)
 - **Haptic feedback**: 주요 CTA 버튼에 `generateHapticFeedback({ type: 'success' })`, Toggle/Chip에 `tickWeak` 적용
-  - import: `import { generateHapticFeedback } from '@apps-in-toss/framework';`
+  - import: `import { generateHapticFeedback } from '@apps-in-toss/web-framework';`
 - **Dark mode**: HEX 색상(#FFFFFF, #333 등) 하드코딩 절대 금지 — TDS 컴포넌트 또는 `var(--tds-color-*)` CSS 변수만 사용
 - **Safe area**: `position: fixed` 하단 요소에 `paddingBottom: calc(Npx + env(safe-area-inset-bottom))` 필수. `height: 100vh` 단독 사용 금지 → `100dvh` 사용
 

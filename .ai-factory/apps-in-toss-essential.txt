@@ -1,0 +1,90 @@
+@apps-in-toss/web-framework 실제 API — node_modules .d.ts에서 직접 검증 (2026-04-13)
+이 파일과 다른 문서가 충돌하면 이 파일이 우선한다.
+존재하지 않는 API는 절대 생성하지 말 것 ("모르면 지어내지 마라").
+
+=== 존재하지 않는 것 (생성 금지) ===
+- useTossLogin, useTossPayment, useTossAd, useTossPromotion — React 훅 자체가 SDK에 없음
+- window.Toss.xxx — 구식/환각 패턴
+- TossRewardAd, AdSlot — SDK 컴포넌트 아님 (src/components/에 로컬 래퍼로 구현)
+
+=== import 경로 ===
+대부분: import { ... } from '@apps-in-toss/web-framework'
+광고 저수준 API: import { TossAds, loadFullScreenAd, showFullScreenAd } from '@apps-in-toss/web-bridge'
+(web-framework가 re-export하지만 TypeScript moduleResolution:"bundler"에서 타입 체인이 끊길 수 있음 → web-bridge 직접 import)
+
+=== 햅틱 ===
+import { generateHapticFeedback } from '@apps-in-toss/web-framework'
+generateHapticFeedback({ type: 'success' | 'tickWeak' | 'tickStrong' | ... })
+
+=== 스토리지 (네이티브, Promise 기반) ===
+import { Storage } from '@apps-in-toss/web-framework'
+Storage.getItem(key: string): Promise<string | null>
+Storage.setItem(key: string, value: string): Promise<void>
+Storage.removeItem(key: string): Promise<void>
+Storage.clearItems(): Promise<void>
+※ 웹 환경 localStorage와 별개. 앱 재시작 후에도 유지.
+
+=== 광고 — 배너 (TossAds) ===
+import { TossAds } from '@apps-in-toss/web-bridge'
+TossAds.initialize(options: {})                                          // 반드시 먼저 호출
+TossAds.attachBanner(adGroupId: string, target: string | HTMLElement, options?: AttachBannerOptions): AttachBannerResult
+  AttachBannerOptions: { theme?: 'light' | 'dark' | 'auto', tone?: 'blackAndWhite' | 'grey', variant?: 'expanded' | 'card', callbacks?: BannerSlotCallbacks }
+  BannerSlotCallbacks: { onAdRendered?, onAdViewable?, onAdClicked?, onAdImpression?, onAdFailedToRender?, onNoFill? }
+  AttachBannerResult: { destroy(): void }
+TossAds.destroy(target: HTMLElement): void
+TossAds.destroyAll(): void
+※ adGroupId는 앱인토스 콘솔에서 발급. slotId라는 prop 없음.
+
+=== 광고 — 리워드/전면 (loadFullScreenAd + showFullScreenAd) ===
+import { loadFullScreenAd, showFullScreenAd } from '@apps-in-toss/web-bridge'
+
+loadFullScreenAd({ options: { adGroupId: string }, onEvent: (e: { type: 'loaded' }) => void, onError: (err: unknown) => void }): () => void (cleanup)
+
+showFullScreenAd({ options: { adGroupId: string }, onEvent: (e: ShowFullScreenAdEvent) => void, onError: (err: unknown) => void }): () => void (cleanup)
+
+ShowFullScreenAdEvent 타입:
+  { type: 'requested' }
+  { type: 'show' }
+  { type: 'impression' }
+  { type: 'clicked' }
+  { type: 'dismissed' }          ← 광고 닫힘
+  { type: 'failedToShow' }
+  { type: 'userEarnedReward', data: { unitType: string, unitAmount: number } }  ← 리워드 지급 시점
+
+사용 패턴:
+  1. loadFullScreenAd → onEvent('loaded') 후
+  2. showFullScreenAd → userEarnedReward 이벤트 수신 → dismissed 이벤트로 종료 확인
+  반환된 cleanup 함수를 useEffect return / 컴포넌트 unmount 시 반드시 호출
+
+=== 결제 (IAP) ===
+import { IAP } from '@apps-in-toss/web-framework'
+IAP.createOneTimePurchaseOrder({ options: { sku: string, processProductGrant: ({ orderId }) => boolean | Promise<boolean> }, onEvent: (e: SuccessEvent) => void, onError: (err: unknown) => void }): () => void
+IAP.createSubscriptionPurchaseOrder({ options: { sku, offerId?, processProductGrant }, onEvent, onError }): () => void
+IAP.getProductItemList({ skus: string[] }): Promise<IapProductListItem[]>
+IAP.getCompletedOrRefundedOrders(...): Promise<CompletedOrRefundedOrdersResult>
+※ Stripe, 외부 결제 절대 금지
+
+=== 인증 ===
+import { getIsTossLoginIntegratedService } from '@apps-in-toss/web-framework'
+getIsTossLoginIntegratedService(): Promise<boolean>
+※ 로그인 구현 불필요 — Toss 앱 세션 자동 신뢰. 통합 서비스 여부 확인에만 사용.
+※ login() 함수 없음. 로그인 플로우 직접 구현 금지.
+
+=== 프로모션 ===
+import { grantPromotionReward } from '@apps-in-toss/web-framework'
+grantPromotionReward({ params: { promotionCode: string, amount: number } }): Promise<void>
+※ amount ≤ 5000 (1인당 최대 5,000원 제한 — 위반 시 콘솔 차단)
+※ promotionCode는 앱인토스 콘솔에서 발급받은 코드 사용 필수
+
+=== 기타 자주 쓰는 API ===
+import { share, openURL, getPlatformOS, getNetworkStatus, requestReview } from '@apps-in-toss/web-framework'
+share({ title?, text?, url? }): Promise<void>
+openURL(url: string): Promise<void>    ※ 외부 URL: openURL('supertoss://web?url=...&external=true')
+getPlatformOS(): 'ios' | 'android'
+getNetworkStatus(): Promise<{ isConnected: boolean }>
+requestReview(): Promise<void>
+
+import { Analytics } from '@apps-in-toss/web-framework'
+Analytics.screen(screenName: string): void
+Analytics.impression(name: string, params?: Record<string, unknown>): void
+Analytics.click(name: string, params?: Record<string, unknown>): void

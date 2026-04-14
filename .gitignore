@@ -4,3 +4,5 @@ dist/
 .env
 .env.local
 coverage/
+artifacts/*
+!artifacts/.gitkeep
