@@ -13,7 +13,8 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:scripts": "vitest run --config vitest.scripts.config.ts",
-    "generate:ait": "tsx scripts/generate-apps-in-toss.ts"
+    "generate:ait": "tsx scripts/generate-apps-in-toss.ts",
+    "generate:ait:ai": "node --env-file=.env --import tsx/esm scripts/generate-apps-in-toss.ts --write --force"
   },
   "dependencies": {
     "@apps-in-toss/web-framework": "^2.4.6",

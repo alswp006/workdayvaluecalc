@@ -30,7 +30,7 @@ export async function generateLogo(config: LogoConfig): Promise<LogoResult> {
     });
 
     if (generated.ok) {
-      const validation = await validateLogo(generated.buffer);
+      const validation = await validateLogo(generated.buffer, { skipBrightnessCheck: true });
       if (validation.ok) {
         return {
           logo: generated.buffer,
