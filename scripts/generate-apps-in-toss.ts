@@ -3,10 +3,11 @@
  * 앱인토스 미니앱 등록 산출물 생성 스크립트
  *
  * 사용법:
- *   npx tsx scripts/generate-apps-in-toss.ts --dry-run   (기본값)
+ *   npx tsx scripts/generate-apps-in-toss.ts --dry-run        (기본값)
  *   npx tsx scripts/generate-apps-in-toss.ts --write
  *   npx tsx scripts/generate-apps-in-toss.ts --write --force
  *   npx tsx scripts/generate-apps-in-toss.ts --skip-logo
+ *   npx tsx scripts/generate-apps-in-toss.ts --skip-banner
  *   npx tsx scripts/generate-apps-in-toss.ts --config scripts/custom.config.ts
  */
 
@@ -16,6 +17,7 @@ import nodePath from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { validateManifest } from './lib/manifest.js';
 import { generateLogo } from './lib/logo/index.js';
+import { composeBanner } from './lib/logo/banner.js';
 import type { AppsInTossManifest } from './lib/manifest.js';
 import type { LogoConfig } from './lib/logo/index.js';
 
@@ -24,6 +26,8 @@ import type { LogoConfig } from './lib/logo/index.js';
 export interface AppsInTossConfig extends AppsInTossManifest {
   logo: {
     conceptDescription: string;
+    /** 배경색 HEX. 미지정 시 appName 해시로 결정. */
+    backgroundColor?: string;
   };
 }
 
@@ -34,6 +38,7 @@ interface CliOptions {
   write: boolean;
   force: boolean;
   skipLogo: boolean;
+  skipBanner: boolean;
   configPath: string;
 }
 
@@ -46,9 +51,11 @@ function parseArgs(argv: string[]): CliOptions {
     write: hasWrite,
     force: args.includes('--force'),
     skipLogo: args.includes('--skip-logo'),
-    configPath: configIdx >= 0 && args[configIdx + 1]
-      ? args[configIdx + 1]
-      : 'scripts/apps-in-toss.config.ts',
+    skipBanner: args.includes('--skip-banner'),
+    configPath:
+      configIdx >= 0 && args[configIdx + 1]
+        ? args[configIdx + 1]
+        : 'scripts/apps-in-toss.config.ts',
   };
 }
 
@@ -71,12 +78,22 @@ function buildManifestText(manifest: AppsInTossManifest, logoSource: string): st
   return [
     `📋 앱인토스 등록 정보 — ${manifest.englishName}`,
     LINE,
-    `한국어 앱 이름: ${manifest.koreanName}`,
-    `영어 앱 이름:   ${manifest.englishName}`,
-    `appName:        ${manifest.appName}`,
-    `사용 연령:      ${manifest.ageRating}`,
-    `홈페이지:       ${manifest.homepage ?? '(없음)'}`,
+    '── 1스텝: 기본 정보',
+    `한국어 앱 이름:  ${manifest.koreanName}`,
+    `영어 앱 이름:    ${manifest.englishName}`,
+    `appName:         ${manifest.appName}`,
+    `사용 연령:       ${manifest.ageRating}`,
+    `홈페이지:        ${manifest.homepage ?? '(없음)'}`,
     `고객문의 이메일: ${manifest.supportEmail}`,
+    LINE,
+    '── 2스텝: 카테고리 및 노출',
+    `카테고리 (대):   ${manifest.category.primary}`,
+    `카테고리 (중):   ${manifest.category.secondary ?? '(없음)'}`,
+    `카테고리 (소):   ${manifest.category.tertiary ?? '(없음)'}`,
+    `부제:            ${manifest.subtitle}`,
+    `상세 설명:`,
+    manifest.description,
+    `검색 키워드:     ${manifest.searchKeywords.join(' / ')}`,
     LINE,
     `🎨 로고 소스: ${logoSource}`,
     '',
@@ -90,17 +107,20 @@ interface OutputFile {
   description: string;
 }
 
-function listOutputFiles(skipLogo: boolean): OutputFile[] {
+function listOutputFiles(skipLogo: boolean, skipBanner: boolean): OutputFile[] {
   const files: OutputFile[] = [
     { path: 'artifacts/apps-in-toss-manifest.json', description: '매니페스트 JSON' },
     { path: 'artifacts/apps-in-toss-manifest.txt', description: '복붙용 텍스트' },
-    { path: 'artifacts/logo-meta.json', description: '로고 메타데이터' },
+    { path: 'artifacts/assets-meta.json', description: '에셋 생성 메타데이터' },
   ];
   if (!skipLogo) {
     files.push(
-      { path: 'artifacts/logo.png', description: '로고 (600x600 PNG)' },
-      { path: 'artifacts/logo-dark.png', description: '다크모드 로고 (600x600 PNG)' },
+      { path: 'artifacts/logo.png', description: '앱 로고 (600×600 PNG)' },
+      { path: 'artifacts/logo-dark.png', description: '다크모드 로고 (600×600 PNG)' },
     );
+  }
+  if (!skipBanner) {
+    files.push({ path: 'artifacts/banner.png', description: '가로형 배너 (1932×828 PNG)' });
   }
   return files;
 }
@@ -118,7 +138,7 @@ async function main() {
   const manifest = validateManifest(rawConfig);
   console.log('✓ 매니페스트 검증 통과');
 
-  const outputFiles = listOutputFiles(opts.skipLogo);
+  const outputFiles = listOutputFiles(opts.skipLogo, opts.skipBanner);
 
   // 2. Dry-run: 계획 출력 (로고 생성 포함해서 검증)
   if (opts.dryRun) {
@@ -133,6 +153,17 @@ async function main() {
       const lr = await generateLogo(logoConfig);
       logoSource = lr.source;
       console.log(`✓ 로고 생성 완료 (소스: ${lr.source})`);
+
+      if (!opts.skipBanner) {
+        console.log('🖼️  배너 생성 중 (미리보기)...');
+        await composeBanner({
+          logo: lr.logo,
+          koreanName: manifest.koreanName,
+          subtitle: manifest.subtitle,
+          backgroundColor: rawConfig.logo.backgroundColor,
+        });
+        console.log('✓ 배너 생성 완료');
+      }
     }
     const manifestTxt = buildManifestText(manifest, logoSource);
     console.log('\n🔍 Dry-run 모드 — 생성될 파일 목록:');
@@ -172,27 +203,50 @@ async function main() {
     console.log(`✓ 로고 생성 완료 (소스: ${logoResult.source})`);
   }
 
+  // 5. 배너 생성
+  let bannerBuffer: Buffer | null = null;
+  if (!opts.skipBanner && logoResult) {
+    console.log('\n🖼️  배너 생성 중...');
+    bannerBuffer = await composeBanner({
+      logo: logoResult.logo,
+      koreanName: manifest.koreanName,
+      subtitle: manifest.subtitle,
+      backgroundColor: rawConfig.logo.backgroundColor,
+    });
+    console.log('✓ 배너 생성 완료');
+  }
+
+  // 6. 파일 쓰기
   const logoSource = logoResult?.source ?? 'skipped';
   const manifestJson = JSON.stringify(manifest, null, 2);
   const manifestTxt = buildManifestText(manifest, logoSource);
-  const logoMeta = JSON.stringify(
-    { source: logoSource, generatedAt: new Date().toISOString(), appName: manifest.appName },
+  const assetsMeta = JSON.stringify(
+    {
+      logoSource,
+      hasBanner: bannerBuffer !== null,
+      generatedAt: new Date().toISOString(),
+      appName: manifest.appName,
+    },
     null,
     2,
   );
 
   await fs.writeFile(nodePath.join(artifactsDir, 'apps-in-toss-manifest.json'), manifestJson, 'utf8');
   await fs.writeFile(nodePath.join(artifactsDir, 'apps-in-toss-manifest.txt'), manifestTxt, 'utf8');
-  await fs.writeFile(nodePath.join(artifactsDir, 'logo-meta.json'), logoMeta, 'utf8');
+  await fs.writeFile(nodePath.join(artifactsDir, 'assets-meta.json'), assetsMeta, 'utf8');
 
   if (logoResult) {
     await fs.writeFile(nodePath.join(artifactsDir, 'logo.png'), logoResult.logo);
     await fs.writeFile(nodePath.join(artifactsDir, 'logo-dark.png'), logoResult.darkLogo);
   }
 
+  if (bannerBuffer) {
+    await fs.writeFile(nodePath.join(artifactsDir, 'banner.png'), bannerBuffer);
+  }
+
   console.log('\n✅ 산출물 생성 완료:');
   for (const f of outputFiles) {
-    console.log(`  artifacts/${nodePath.basename(f.path)}`);
+    console.log(`  ${f.path}`);
   }
   console.log('\n' + manifestTxt);
 }
